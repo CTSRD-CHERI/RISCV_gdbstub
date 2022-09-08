@@ -7,3 +7,8 @@ all:
 	$(CC) -c gdbstub.c
 	$(CC) -c gdbstub_fe.c
 	$(CC) *o -lelf -lpthread -o main
+
+.PHONY: clean
+clean:
+	rm -f *.o
+	rm -f main

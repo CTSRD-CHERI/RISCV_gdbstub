@@ -566,14 +566,25 @@ const char *gdbstub_be_help (void)
 
 uint32_t  gdbstub_be_init (FILE *logfile, bool autoclose)
 {
+    printf ("%s: setting up backend\n", __FUNCTION__);
+    fprintf (logfile, "%s: started\n", __FUNCTION__);
     // Fill in whatever is needed to initialize
 
     logfile_fp        = logfile;
     autoclose_logfile = autoclose;
 
+    if (dmi_init () == -1) {
+      printf ("%s: failed dmi_init\n", __FUNCTION__);
+      fprintf (logfile, "%s: failed dmi_init\n", __FUNCTION__);
+      exit (EXIT_FAILURE);
+    }
     initialized = true;
 
+    //uint32_t status = gdbstub_be_dm_reset (gdbstub_be_xlen);
+    //if (status != status_ok) goto err;
     uint32_t status = gdbstub_be_stop (gdbstub_be_xlen);
+    if (status != status_ok) goto err;
+    status = gdbstub_be_ndm_reset (gdbstub_be_xlen, true);
     if (status != status_ok) goto err;
 
     uint64_t dcsr64;
@@ -600,11 +611,13 @@ uint32_t  gdbstub_be_init (FILE *logfile, bool autoclose)
     status = gdbstub_be_reg_write (gdbstub_be_xlen, csr_addr_dcsr, dcsr, & cmderr);
     if (status != status_ok) goto err;
 
+    fprintf (logfile_fp, "%s: done\n", __FUNCTION__);
     return status_ok;
 
 err:
     initialized = false;
 
+    fprintf (logfile_fp, "%s: error\n", __FUNCTION__);
     if (autoclose_logfile && (logfile_fp != NULL))
 	fclose (logfile_fp);
 

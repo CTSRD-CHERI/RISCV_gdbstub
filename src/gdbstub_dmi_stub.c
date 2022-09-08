@@ -47,10 +47,8 @@ struct fmem_request {
 #define	FMEM_WRITE	_IOWR('X', 2, struct fmem_request)
 
 static int fd;
-static int opened = 0;
 
-static int
-fmem_read(uint32_t offset)
+static int fmem_read(uint32_t offset)
 {
         struct fmem_request req;
         int error;
@@ -66,8 +64,7 @@ fmem_read(uint32_t offset)
         return (0);
 }
 
-static int
-fmem_write(uint32_t offset, uint32_t data)
+static int fmem_write(uint32_t offset, uint32_t data)
 {
 	struct fmem_request req;
 	int error;
@@ -81,8 +78,7 @@ fmem_write(uint32_t offset, uint32_t data)
 	return (error);
 }
 
-static void
-fmem_open(void)
+static int fmem_open ()
 {
 	char* fmemdev = getenv("RISCV_GDB_STUB_FMEM_DEV");
 	char filename[256] = "/dev/fmem_sys0_debug_unit";
@@ -91,41 +87,26 @@ fmem_open(void)
 		filename[255] = '\0';
 	}
 	fd = open(filename, O_RDWR);
-
-        /* Reset */
-	fmem_write(0x10 * 4, 0x80000003);
-	sleep(1);
-	fmem_write(0x10 * 4, 0x80000001);
+        return fd;
 }
 
-void
-dmi_write(uint16_t addr, uint32_t data)
+int dmi_init () {
+  return fmem_open ();
+}
+
+void dmi_write (uint16_t addr, uint32_t data)
 {
-
-	if (opened == 0) {
-		fmem_open();
-		opened = 1;
-	}
-
 	//printf("%s: addr %x: data %x\n", __func__, addr, data);
 	//fflush(stdout);
-
 	fmem_write(addr * 4, data);
 }
 
-uint32_t
-dmi_read(uint16_t addr)
+uint32_t dmi_read (uint16_t addr)
 {
+	//printf("%s: addr %x", __func__, addr);
 	uint32_t reg;
-
-	if (opened == 0) {
-		fmem_open();
-		opened = 1;
-	}
-
-	//printf("%s: addr %x, val %x\n", __func__, addr, reg);
-	//fflush(stdout);
 	reg = fmem_read(addr * 4);
-
+	//printf(", val %x\n", reg);
+	//fflush(stdout);
 	return (reg);
 }
