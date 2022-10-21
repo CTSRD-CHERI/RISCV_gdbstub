@@ -806,7 +806,10 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 
     // Poll dmstatus until '(! anyunavail)'
     uint32_t dmstatus;
-    poll_dmstatus ("gdbstub_be_ndm_reset", DMSTATUS_ANYUNAVAIL, 0, & dmstatus, false);
+    poll_dmstatus ( "gdbstub_be_ndm_reset"
+                  , DMSTATUS_ANYUNAVAIL | DMSTATUS_ALLHALTED
+                  , haltreq ? DMSTATUS_ALLHALTED : 0
+                  , & dmstatus, false );
 
     if (logfile_fp != NULL) {
 	fprintf (logfile_fp,"    gdbstub_be_ndm_reset: dmstatus = 0x%0x\n", dmstatus);
