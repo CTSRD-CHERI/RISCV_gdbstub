@@ -12,6 +12,12 @@
 #define   status_ok       1
 
 // ================================================================
+// Thread-related constants
+
+#define THREADS_MAX 8
+static int num_harts = 2; // ToDo: Should discover this dynamically.
+
+// ================================================================
 // Public globals
 
 // ================================================================

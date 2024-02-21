@@ -1086,7 +1086,9 @@ void handle_RSP_H_set_thread_id (const char *buf, const size_t buf_len)
     // Write hartsel register.
     if (thread == 0) {
         status = status_ok;
-    } else if (thread != -1) {
+    } else if (thread == -1) {
+        status = gdbstub_be_hart_select (-1, op=='g');
+    } else {
     	status = gdbstub_be_hart_select (thread-1, op=='g');
     }
 
@@ -1456,7 +1458,13 @@ handle_RSP_q (const char *buf, const size_t buf_len)
 
     else if (strncmp ("qfThreadInfo", buf, strlen ("qfThreadInfo")) == 0) {
 	char response [32];
-	snprintf (response, 32, "m1,2");
+	if (num_harts == 1) {
+	    snprintf (response, 32, "m1");
+	} else if (num_harts == 2) {
+	    snprintf (response, 32, "m1,2");
+	} else {
+	    fprintf (logfile, "WARNING: Using an unsupported number of threads in handle_RSP_q");
+	}
 	send_RSP_packet_to_GDB (response, strlen (response));
     }
 
@@ -1538,7 +1546,7 @@ void handle_RSP_T_thread_id_alive (const char *buf, const size_t buf_len)
 
     uint32_t status = status_err;
     // Write hartsel register.
-    if (thread == 0) {
+    if (thread == 0 || thread == -1) {
         status = status_ok;
     } else if (thread > 0 && thread < 3) {
         status = status_ok; // ToDo: should have some way to check number of threads in current implementation.

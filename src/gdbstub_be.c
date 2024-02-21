@@ -58,7 +58,8 @@ static FILE *logfile_fp = NULL;
 static bool autoclose_logfile = false;
 
 static uint32_t orig_dcsr;
-static int32_t hartsel = 0;
+
+static bool hartsels[THREADS_MAX];
 
 // ================================================================
 // Run-mode
@@ -669,6 +670,17 @@ err:
     return status;
 }
 
+void dmcontrol_write (uint32_t dmcontrol)
+{
+    for (int i = 0; i < THREADS_MAX; i++) {
+        if (hartsels[i]) {
+            dmi_write (dm_addr_dmcontrol, fn_insert_hartsel_dmcontrol(dmcontrol,
+                                                                      i,         // hartsello
+                                                                      0));       // hartselhi
+        }
+    }
+}
+
 // ================================================================
 // Reset the Debug Module
 
@@ -688,7 +700,7 @@ uint32_t  gdbstub_be_dm_reset (const uint8_t xlen)
 					  false,          // hartreset
 					  false,          // ackhavereset
 					  false,          // hasel
-					  hartsel,        // hartsello
+					  0,              // hartsello
 					  0,              // hartselhi
 					  false,          // setresethaltreq
 					  false,          // clrresethaltreq
@@ -699,7 +711,7 @@ uint32_t  gdbstub_be_dm_reset (const uint8_t xlen)
 			  "gdbstub_be_dm_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Poll abstractcs until not busy, check for errors
     uint32_t abstractcs;
@@ -773,7 +785,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 				 false,          // hartreset
 				 false,          // ackhavereset
 				 false,          // hasel
-				 hartsel,        // hartsello
+				 0,              // hartsello
 				 0,              // hartselhi
 				 false,          // setresethaltreq
 				 false,          // clrresethaltreq
@@ -784,7 +796,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 			  "gdbstub_be_ndm_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Deassert dmcontrol.ndmreset
     dmcontrol = fn_mk_dmcontrol (haltreq,
@@ -792,7 +804,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 				 false,          // hartreset
 				 false,          // ackhavereset
 				 false,          // hasel
-				 hartsel,        // hartsello
+				 0,              // hartsello
 				 0,              // hartselhi
 				 false,          // setresethaltreq
 				 false,          // clrresethaltreq
@@ -803,7 +815,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 			  "gdbstub_be_ndm_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Poll dmstatus until '(! anyunavail)'
     uint32_t dmstatus;
@@ -841,7 +853,7 @@ uint32_t  gdbstub_be_hart_reset (const uint8_t xlen, bool haltreq)
 					  true,     // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  hartsel,  // hartsello
+					  0,        // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq
@@ -852,7 +864,7 @@ uint32_t  gdbstub_be_hart_reset (const uint8_t xlen, bool haltreq)
 			  "gdbstub_be_hart_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Poll dmstatus until '(! anyhavereset)'
     uint32_t dmstatus;
@@ -870,18 +882,27 @@ uint32_t  gdbstub_be_hart_select (const int32_t new_hartsel, bool global)
 
     if (logfile_fp != NULL) {
 	fprintf (logfile_fp,
-		 "gdbstub_be_hart_select (hartsel = %0d)\n", hartsel);
+		 "gdbstub_be_hart_select (hartsel = %0d)\n", new_hartsel);
 	fflush (logfile_fp);
     }
 
+    for (int i = 0; i < THREADS_MAX; i++) {
+        hartsels[new_hartsel] = false;
+    }
     // Select the new hart
-    hartsel = new_hartsel;
+    if (new_hartsel == -1) {
+        for (int i = 0; i < num_harts; i++) {
+            hartsels[i] = true;
+        }
+    } else {
+        hartsels[new_hartsel] = true;
+    }
     uint32_t dmcontrol = fn_mk_dmcontrol (false,
 					  false,    // resumereq
 					  false,    // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  hartsel,  // hartsello
+					  0,        // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq
@@ -892,7 +913,7 @@ uint32_t  gdbstub_be_hart_select (const int32_t new_hartsel, bool global)
 			  "gdbstub_be_hart_select: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     return status_ok;
 }
@@ -1078,7 +1099,7 @@ uint32_t gdbstub_be_continue (const uint8_t xlen)
 				 false,    // hartreset
 				 false,    // ackhavereset
 				 false,    // hasel
-				 hartsel,  // hartsello
+				 0,        // hartsello
 				 0,        // hartselhi
 				 false,    // setresethaltreq
 				 false,    // clrresethaltreq
@@ -1090,7 +1111,7 @@ uint32_t gdbstub_be_continue (const uint8_t xlen)
 	fflush (logfile_fp);
     }
 
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Poll dmstatus until 'allrunning'
     uint32_t dmstatus;
@@ -1189,7 +1210,7 @@ uint32_t  gdbstub_be_step (const uint8_t xlen)
 					  false,    // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  hartsel,  // hartsello
+					  0,        // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq
@@ -1200,7 +1221,7 @@ uint32_t  gdbstub_be_step (const uint8_t xlen)
 			  "gdbstub_be_step: write dmcontrol := ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Poll dmstatus until 'allhalted'
     if (logfile_fp != NULL) {
@@ -1231,7 +1252,7 @@ uint32_t  gdbstub_be_stop (const uint8_t xlen)
 					  false,    // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  hartsel,  // hartsello
+					  0,        // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq
@@ -1241,7 +1262,7 @@ uint32_t  gdbstub_be_stop (const uint8_t xlen)
 	fprint_dmcontrol (logfile_fp, "gdbstub_be_stop: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmi_write (dm_addr_dmcontrol, dmcontrol);
+    dmcontrol_write(dmcontrol);
 
     // Poll dmstatus until 'allhalted'
     uint32_t dmstatus;

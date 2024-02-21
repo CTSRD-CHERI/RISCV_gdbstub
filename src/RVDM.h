@@ -96,6 +96,11 @@ uint32_t fn_mk_dmcontrol (bool       haltreq,
 			  bool       ndmreset,
 			  bool       dmactive);
 
+uint32_t fn_insert_hartsel_dmcontrol (
+			  uint32_t   dmcontrol,
+			  uint16_t   hartsello,
+			  uint16_t   hartselhi);
+
 extern bool     fn_dmcontrol_haltreq         (uint32_t dm_word);
 extern bool     fn_dmcontrol_resumereq       (uint32_t dm_word);
 extern bool     fn_dmcontrol_hartreset       (uint32_t dm_word);
