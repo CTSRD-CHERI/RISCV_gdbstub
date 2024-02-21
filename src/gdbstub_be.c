@@ -58,6 +58,7 @@ static FILE *logfile_fp = NULL;
 static bool autoclose_logfile = false;
 
 static uint32_t orig_dcsr;
+static int32_t hartsel = 0;
 
 // ================================================================
 // Run-mode
@@ -687,7 +688,7 @@ uint32_t  gdbstub_be_dm_reset (const uint8_t xlen)
 					  false,          // hartreset
 					  false,          // ackhavereset
 					  false,          // hasel
-					  0,              // hartsello
+					  hartsel,        // hartsello
 					  0,              // hartselhi
 					  false,          // setresethaltreq
 					  false,          // clrresethaltreq
@@ -772,7 +773,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 				 false,          // hartreset
 				 false,          // ackhavereset
 				 false,          // hasel
-				 0,              // hartsello
+				 hartsel,        // hartsello
 				 0,              // hartselhi
 				 false,          // setresethaltreq
 				 false,          // clrresethaltreq
@@ -791,7 +792,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 				 false,          // hartreset
 				 false,          // ackhavereset
 				 false,          // hasel
-				 0,              // hartsello
+				 hartsel,        // hartsello
 				 0,              // hartselhi
 				 false,          // setresethaltreq
 				 false,          // clrresethaltreq
@@ -840,7 +841,7 @@ uint32_t  gdbstub_be_hart_reset (const uint8_t xlen, bool haltreq)
 					  true,     // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  0,        // hartsello
+					  hartsel,  // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq
@@ -856,6 +857,42 @@ uint32_t  gdbstub_be_hart_reset (const uint8_t xlen, bool haltreq)
     // Poll dmstatus until '(! anyhavereset)'
     uint32_t dmstatus;
     poll_dmstatus ("gdbstub_be_hart_reset", DMSTATUS_ANYHAVERESET, 0, & dmstatus, false);
+
+    return status_ok;
+}
+
+// ================================================================
+// Select the HART 
+
+uint32_t  gdbstub_be_hart_select (const int32_t new_hartsel, bool global)
+{
+    if (! initialized) return status_ok;
+
+    if (logfile_fp != NULL) {
+	fprintf (logfile_fp,
+		 "gdbstub_be_hart_select (hartsel = %0d)\n", hartsel);
+	fflush (logfile_fp);
+    }
+
+    // Select the new hart
+    hartsel = new_hartsel;
+    uint32_t dmcontrol = fn_mk_dmcontrol (false,
+					  false,    // resumereq
+					  false,    // hartreset
+					  false,    // ackhavereset
+					  false,    // hasel
+					  hartsel,  // hartsello
+					  0,        // hartselhi
+					  false,    // setresethaltreq
+					  false,    // clrresethaltreq
+					  false,    // ndmreset
+					  true);    // dmactive_N
+    if (logfile_fp != NULL) {
+	fprint_dmcontrol (logfile_fp,
+			  "gdbstub_be_hart_select: write ", dmcontrol, "\n");
+	fflush (logfile_fp);
+    }
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     return status_ok;
 }
@@ -1041,7 +1078,7 @@ uint32_t gdbstub_be_continue (const uint8_t xlen)
 				 false,    // hartreset
 				 false,    // ackhavereset
 				 false,    // hasel
-				 0,        // hartsello
+				 hartsel,  // hartsello
 				 0,        // hartselhi
 				 false,    // setresethaltreq
 				 false,    // clrresethaltreq
@@ -1152,7 +1189,7 @@ uint32_t  gdbstub_be_step (const uint8_t xlen)
 					  false,    // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  0,        // hartsello
+					  hartsel,  // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq
@@ -1194,7 +1231,7 @@ uint32_t  gdbstub_be_stop (const uint8_t xlen)
 					  false,    // hartreset
 					  false,    // ackhavereset
 					  false,    // hasel
-					  0,        // hartsello
+					  hartsel,  // hartsello
 					  0,        // hartselhi
 					  false,    // setresethaltreq
 					  false,    // clrresethaltreq

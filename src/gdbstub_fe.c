@@ -1065,6 +1065,36 @@ void handle_RSP_G_write_all_registers (const char *buf, const size_t buf_len)
 }
 
 // ================================================================
+// 'H': respond to '$H op thread-id #xx' packet received from GDB (set thread-id)
+
+static
+void handle_RSP_H_set_thread_id (const char *buf, const size_t buf_len)
+{
+    // Parse the addr and len in the RSP command
+    char op;
+    int32_t thread;
+
+    if (2 != sscanf (buf, "H%c%" SCNx32, & op, & thread)) {
+	if (logfile) {
+	    fprintf (logfile, "ERROR: gdbstub_fe.packet '$m...' packet from GDB: unable to parse op, thread-id\n");
+	}
+	send_OK_or_error_response (status_err);
+	return;
+    }
+
+    uint32_t status = status_err;
+    // Write hartsel register.
+    if (thread == 0) {
+        status = status_ok;
+    } else if (thread != -1) {
+    	status = gdbstub_be_hart_select (thread-1, op=='g');
+    }
+
+    // Send response to GDB
+    send_OK_or_error_response (status);
+}
+
+// ================================================================
 // 'm': respond to '$m addr, len #xx' packet received from GDB (read memory)
 
 static
@@ -1424,6 +1454,18 @@ handle_RSP_q (const char *buf, const size_t buf_len)
 	handle_RSP_qRcmd (buf_bin, n3);
     }
 
+    else if (strncmp ("qfThreadInfo", buf, strlen ("qfThreadInfo")) == 0) {
+	char response [32];
+	snprintf (response, 32, "m1,2");
+	send_RSP_packet_to_GDB (response, strlen (response));
+    }
+
+    else if (strncmp ("qsThreadInfo", buf, strlen ("qsThreadInfo")) == 0) {
+	char response [32];
+	snprintf (response, 32, "l");
+	send_RSP_packet_to_GDB (response, strlen (response));
+    }
+
     else {
 	if (logfile) {
 	    fprintf (logfile, "WARNING: gdbstub_fe.handle_RSP_q: Unrecognized packet (%0zu chars): ", buf_len - 1);
@@ -1475,6 +1517,35 @@ void handle_RSP_s_step (const char *buf, const size_t buf_len)
 
     // Go into 'waiting for stop-reason' mode
     waiting_for_stop_reason = true;
+}
+
+// ================================================================
+// 'T': '$H thread-id #xx' packet received from GDB (check that thread-id is alive)
+
+static
+void handle_RSP_T_thread_id_alive (const char *buf, const size_t buf_len)
+{
+    // Parse the thread-id in the RSP command
+    int32_t thread;
+
+    if (1 != sscanf (buf, "T%" SCNx32 "", & thread)) {
+        if (logfile) {
+            fprintf (logfile, "ERROR: gdbstub_fe.packet '$m...' packet from GDB: unable to parse thread-id\n");
+        }
+        send_OK_or_error_response (status_err);
+        return;
+    }
+
+    uint32_t status = status_err;
+    // Write hartsel register.
+    if (thread == 0) {
+        status = status_ok;
+    } else if (thread > 0 && thread < 3) {
+        status = status_ok; // ToDo: should have some way to check number of threads in current implementation.
+    }
+
+    // Send response to GDB
+    send_OK_or_error_response (status);
 }
 
 // ================================================================
@@ -1651,6 +1722,9 @@ printf("%s: 2\n", __func__);
             else if (gdb_rsp_pkt_buf [0] == 'G') {
                 handle_RSP_G_write_all_registers (gdb_rsp_pkt_buf, n);
             }
+	    else if (gdb_rsp_pkt_buf [0] == 'H') {
+                handle_RSP_H_set_thread_id (gdb_rsp_pkt_buf, n);
+            }
             else if (gdb_rsp_pkt_buf [0] == 'm') {
                 handle_RSP_m_read_mem (gdb_rsp_pkt_buf, n);
             }
@@ -1669,6 +1743,9 @@ printf("%s: 2\n", __func__);
             else if (gdb_rsp_pkt_buf [0] == 's') {
                 handle_RSP_s_step (gdb_rsp_pkt_buf, n);
             }
+	    else if (gdb_rsp_pkt_buf [0] == 'T') {
+		handle_RSP_T_thread_id_alive(gdb_rsp_pkt_buf, n);
+	    }
             else if (gdb_rsp_pkt_buf [0] == 'X') {
                 handle_RSP_X_write_mem_bin_data (gdb_rsp_pkt_buf, n);
             }
