@@ -1085,7 +1085,7 @@ void handle_RSP_H_set_thread_id (const char *buf, const size_t buf_len)
     uint32_t status = status_err;
     // Write hartsel register.
     if (thread == 0) {
-        status = status_ok;
+        status = gdbstub_be_hart_select (0, op=='g');
     } else if (thread == -1) {
         status = gdbstub_be_hart_select (-1, op=='g');
     } else {
@@ -1545,7 +1545,6 @@ void handle_RSP_T_thread_id_alive (const char *buf, const size_t buf_len)
     }
 
     uint32_t status = status_err;
-    // Write hartsel register.
     if (thread == 0 || thread == -1) {
         status = status_ok;
     } else if (thread > 0 && thread < 3) {
