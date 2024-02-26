@@ -12,11 +12,6 @@
 #define   status_ok       1
 
 // ================================================================
-// Thread-related constants
-
-static int num_harts = 2; // ToDo: Should discover this dynamically.
-
-// ================================================================
 // Public globals
 
 // ================================================================
@@ -53,11 +48,6 @@ uint32_t  gdbstub_be_final (const uint8_t xlen);
 
 extern
 uint32_t  gdbstub_be_dm_reset (const uint8_t xlen);
-
-// ================================================================
-// Select the HART 
-
-uint32_t  gdbstub_be_hart_select (const int32_t new_hartsel, bool global);
 
 // ================================================================
 // Reset the NDM (non-debug module, i.e., everything but the debug module)

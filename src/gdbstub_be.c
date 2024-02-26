@@ -59,10 +59,6 @@ static bool autoclose_logfile = false;
 
 static uint32_t orig_dcsr;
 
-static int32_t hartsel_c = 0;
-static int32_t hartsel_g = 0;
-static int32_t hartsel_last = 0;
-
 // ================================================================
 // Run-mode
 
@@ -672,42 +668,6 @@ err:
     return status;
 }
 
-void dmcontrol_write (uint32_t dmcontrol, bool is_g)
-{
-    int32_t hartsel = is_g ? hartsel_g : hartsel_c;
-    if (hartsel == -1) {
-        for (int i = 0; i < num_harts; i++) {
-            dmi_write (dm_addr_dmcontrol, fn_insert_hartsel_dmcontrol(dmcontrol,
-                                                                      i,         // hartsello
-                                                                      0));       // hartselhi
-        }
-    } else {
-        dmi_write (dm_addr_dmcontrol, fn_insert_hartsel_dmcontrol(dmcontrol,
-                                                                  hartsel,         // hartsello
-                                                                  0));       // hartselhi
-    }
-    hartsel_last <= hartsel;
-}
-
-void hartsel_write (bool is_g)
-{
-    int32_t hartsel = is_g ? hartsel_g : hartsel_c;
-    if (hartsel != hartsel_last) {
-        uint32_t dmcontrol = fn_mk_dmcontrol (false,
-                                              false,    // resumereq
-                                              false,    // hartreset
-                                              false,    // ackhavereset
-                                              false,    // hasel
-                                              0,        // hartsello - This one will be selected by dmcontrol.
-                                              0,        // hartselhi
-                                              false,    // setresethaltreq
-                                              false,    // clrresethaltreq
-                                              false,    // ndmreset
-                                              true);    // dmactive_N
-        dmcontrol_write(dmcontrol, is_g);
-    }
-}
-
 // ================================================================
 // Reset the Debug Module
 
@@ -738,7 +698,7 @@ uint32_t  gdbstub_be_dm_reset (const uint8_t xlen)
 			  "gdbstub_be_dm_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Poll abstractcs until not busy, check for errors
     uint32_t abstractcs;
@@ -823,7 +783,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 			  "gdbstub_be_ndm_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Deassert dmcontrol.ndmreset
     dmcontrol = fn_mk_dmcontrol (haltreq,
@@ -842,7 +802,7 @@ uint32_t  gdbstub_be_ndm_reset (const uint8_t xlen, bool haltreq)
 			  "gdbstub_be_ndm_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Poll dmstatus until '(! anyunavail)'
     uint32_t dmstatus;
@@ -891,35 +851,11 @@ uint32_t  gdbstub_be_hart_reset (const uint8_t xlen, bool haltreq)
 			  "gdbstub_be_hart_reset: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Poll dmstatus until '(! anyhavereset)'
     uint32_t dmstatus;
     poll_dmstatus ("gdbstub_be_hart_reset", DMSTATUS_ANYHAVERESET, 0, & dmstatus, false);
-
-    return status_ok;
-}
-
-// ================================================================
-// Select the HART 
-
-uint32_t  gdbstub_be_hart_select (const int32_t new_hartsel, bool is_g)
-{
-    if (! initialized) return status_ok;
-
-    if (logfile_fp != NULL) {
-	fprintf (logfile_fp,
-		 "gdbstub_be_hart_select (hartsel = %0d)\n", new_hartsel);
-	fflush (logfile_fp);
-    }
-
-    if (is_g) {
-        hartsel_g = new_hartsel;
-    } else {
-        hartsel_c = new_hartsel;
-    }
-
-    hartsel_write(is_g);
 
     return status_ok;
 }
@@ -1069,8 +1005,6 @@ uint32_t gdbstub_be_continue (const uint8_t xlen)
 	fflush (logfile_fp);
     }
 
-    hartsel_write(false); // Select hartsel_c
-
     // If dcsr.step bit is set, clear it
     if (fn_dcsr_step (dcsr)) {
 	if (logfile_fp != NULL) {
@@ -1119,7 +1053,7 @@ uint32_t gdbstub_be_continue (const uint8_t xlen)
 	fflush (logfile_fp);
     }
 
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Poll dmstatus until 'allrunning'
     uint32_t dmstatus;
@@ -1177,8 +1111,6 @@ uint32_t  gdbstub_be_step (const uint8_t xlen)
 	fflush (logfile_fp);
     }
 
-    hartsel_write(false); // Select hartsel_c
-
     // If dcsr.step bit is clear, set it
     if (! fn_dcsr_step (dcsr)) {
 	if (logfile_fp != NULL) {
@@ -1231,7 +1163,7 @@ uint32_t  gdbstub_be_step (const uint8_t xlen)
 			  "gdbstub_be_step: write dmcontrol := ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Poll dmstatus until 'allhalted'
     if (logfile_fp != NULL) {
@@ -1272,7 +1204,7 @@ uint32_t  gdbstub_be_stop (const uint8_t xlen)
 	fprint_dmcontrol (logfile_fp, "gdbstub_be_stop: write ", dmcontrol, "\n");
 	fflush (logfile_fp);
     }
-    dmcontrol_write(dmcontrol, false);
+    dmi_write (dm_addr_dmcontrol, dmcontrol);
 
     // Poll dmstatus until 'allhalted'
     uint32_t dmstatus;
@@ -1307,8 +1239,6 @@ int32_t  gdbstub_be_get_stop_reason (const uint8_t  xlen,
 		 "    gdbstub_be_get_stop_reason (): check dmstatus.allhalted\n");
 	fflush (logfile_fp);
     }
-
-    hartsel_write(false); // Select hartsel_c
     // Poll dmstatus until 'allhalted'
     uint32_t dmstatus;
     poll_dmstatus ("gdbstub_be_get_stop_reason", DMSTATUS_ALLHALTED, DMSTATUS_ALLHALTED, & dmstatus, commands_preempt);
@@ -1426,8 +1356,6 @@ uint32_t  gdbstub_be_PC_read (const uint8_t xlen, uint64_t *p_PC)
 	fflush (logfile_fp);
     }
 
-    hartsel_write(true); // Select hartsel_g
-
     // Read 'dpc' in debug module, = CSR 0X7b1
     uint8_t  cmderr;
     uint32_t status = gdbstub_be_reg_read (xlen, csr_addr_dpc, p_PC, & cmderr);
@@ -1463,8 +1391,6 @@ uint32_t  gdbstub_be_GPR_read (const uint8_t xlen, uint8_t regnum, uint64_t *p_r
     }
 
     assert (regnum < 32);
-
-    hartsel_write(true); // Select hartsel_g
 
     // Debug module encodes GPR x as 0x1000 + x
     uint8_t  cmderr;
@@ -1504,7 +1430,6 @@ uint32_t  gdbstub_be_FPR_read (const uint8_t xlen, uint8_t regnum, uint64_t *p_r
     }
 
     assert (regnum < 32);
-    hartsel_write(true); // Select hartsel_g
 
     // Debug module encodes FPR x as 0x1020 + x
     uint8_t  cmderr;
@@ -1544,7 +1469,6 @@ uint32_t  gdbstub_be_CSR_read (const uint8_t xlen, uint16_t regnum, uint64_t *p_
     }
 
     assert (regnum < 0xFFF);
-    hartsel_write(true); // Select hartsel_g
 
     // Debug module encodes CSR x as x
     uint8_t  cmderr;
@@ -1588,8 +1512,6 @@ uint32_t  gdbstub_be_PRIV_read (const uint8_t xlen, uint64_t *p_PRIV)
     uint64_t dcsr64;
     uint8_t  cmderr;
     uint32_t status = gdbstub_be_reg_read (xlen, csr_addr_dcsr, &dcsr64, & cmderr);
-
-    hartsel_write(true); // Select hartsel_g
 
     if (status == status_err) {
 	if (logfile_fp != NULL) {
@@ -1839,8 +1761,6 @@ uint32_t  gdbstub_be_PC_write (const uint8_t xlen, uint64_t regval)
 	fflush (logfile_fp);
     }
 
-    hartsel_write(true); // Select hartsel_g
-
     // Write 'dpc' in debug module, = CSR 0X7b1
     uint8_t  cmderr;
     uint32_t status = gdbstub_be_reg_write (xlen, csr_addr_dpc, regval, & cmderr);
@@ -1879,7 +1799,6 @@ uint32_t  gdbstub_be_GPR_write (const uint8_t xlen, uint8_t regnum, uint64_t reg
     }
 
     assert (regnum < 32);
-    hartsel_write(true); // Select hartsel_g
 
     // Debug module encodes GPR x as 0x1000 + x
     uint8_t  cmderr;
@@ -1913,7 +1832,6 @@ uint32_t  gdbstub_be_FPR_write (const uint8_t xlen, uint8_t regnum, uint64_t reg
     }
 
     assert (regnum < 32);
-    hartsel_write(true); // Select hartsel_g
 
     // Debug module encodes FPR x as 0x1000 + x
     uint8_t  cmderr;
@@ -1948,7 +1866,6 @@ uint32_t  gdbstub_be_CSR_write (const uint8_t xlen, uint16_t regnum, uint64_t re
     }
 
     assert (regnum < 0xFFF);
-    hartsel_write(true); // Select hartsel_g
 
     // Debug module encodes CSR x as x
     uint8_t  cmderr;
@@ -1981,8 +1898,6 @@ uint32_t  gdbstub_be_PRIV_write (const uint8_t xlen, uint64_t regval)
 		 regval);
 	fflush (logfile_fp);
     }
-
-    hartsel_write(true); // Select hartsel_g
 
     // PRIV is a virtual register aliasing dcsr.prv
     uint64_t dcsr64;

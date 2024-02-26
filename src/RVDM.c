@@ -180,18 +180,6 @@ uint32_t fn_mk_dmcontrol (bool       haltreq,
 	    | ((((uint32_t) dmactive)        & 0x1)   <<  0));
 }
 
-uint32_t fn_insert_hartsel_dmcontrol (
-			  uint32_t   dmcontrol,
-			  uint16_t   hartsello,
-			  uint16_t   hartselhi)
-{
-    dmcontrol &= ~(0x3FF << 16);
-    dmcontrol &= ~(0x3FF << 6);
-    return  ( dmcontrol
-	    | ((((uint32_t) hartsello)       & 0x3FF) << 16)
-	    | ((((uint32_t) hartselhi)       & 0x3FF) <<  6));
-}
-
 bool     fn_dmcontrol_haltreq         (uint32_t dm_word) { return ((dm_word >> 31) & 0x1); }
 bool     fn_dmcontrol_resumereq       (uint32_t dm_word) { return ((dm_word >> 30) & 0x1); }
 bool     fn_dmcontrol_hartreset       (uint32_t dm_word) { return ((dm_word >> 29) & 0x1); }
